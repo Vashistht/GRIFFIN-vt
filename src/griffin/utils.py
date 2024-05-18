@@ -3,7 +3,9 @@ import torch
 
 def select_neurons(neuron_stat, method, k):
     if method == 'topk':
+        # print('input neuron shape', neuron_stat.shape)
         weight, indices = torch.topk(neuron_stat, k, dim=-1)
+        # print('output neuron shape', weight.shape)
     elif method == 'topk_sample':
         topk_weight, topk_indices = torch.topk(neuron_stat, k // 2, dim=-1)
         neuron_stat_clone = neuron_stat.clone()
