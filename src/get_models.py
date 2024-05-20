@@ -100,7 +100,7 @@ def set_seed(args):
 
 def main(dataset='cnn', shots=1, model_arch='llama2', model_size=0, cache_dir=None,
          density=0.1, selection_method='topk', sample_num=1, max_length=-1,
-         k=0, max_tokens=4, seed=42, temp=0.3, greedy=False, device='cuda:9', forward= False): # @vashisthtiwari 
+         k=0, max_tokens=128, seed=42, temp=0.3, greedy=False, device='cuda:9', forward= False): # @vashisthtiwari 
     
     class Args:
         def __init__(self, **kwargs):
@@ -137,7 +137,7 @@ def main(dataset='cnn', shots=1, model_arch='llama2', model_size=0, cache_dir=No
     if args.density < 1:
         model.config.mode = 'gen'
         model.config.selection_method = args.selection_method
-        model = modify_dict[args.model_arch](model, schedule_k, max_gen_length = args.max_tokens)
+        model = modify_dict[args.model_arch](model, schedule_k)
     
     model.half()
     model.eval().to(args.device)
