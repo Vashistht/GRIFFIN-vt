@@ -1,5 +1,5 @@
-# Adapted from Hugging Face implementation
-
+# this one permamently masks non top k as 0 weights
+'''
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -26,8 +26,9 @@ def get_llama_griffin(model, k_schedule):
             new_mlp.mag_mask[indices[0]] = False
 
         l.mlp = new_mlp
-    
+
     return model
+
 
 class LlamaMLP(nn.Module):
     def __init__(self, config, k_factor):
@@ -46,63 +47,73 @@ class LlamaMLP(nn.Module):
 
     def prepare_reduced_weights(self, topk_indices):
         assert topk_indices.shape[0] == 1  # Batch size 1
+        
+        self.gate_proj_reduced = nn.Linear(self.gate_proj.weight.data.shape[1], len(topk_indices), bias=False)
+        self.up_proj_reduced = nn.Linear(self.up_proj.weight.data.shape[1], len(topk_indices), bias=False)
+        self.down_proj_reduced = nn.Linear(len(topk_indices), self.down_proj.weight.data.shape[0], bias=False)
         topk_indices = topk_indices[0]
 
-        self.gate_proj_mask = torch.zeros_like(self.gate_proj.weight.data, dtype=torch.bool)
-        self.gate_proj_mask[topk_indices] = False
-        self.up_proj_mask = torch.zeros_like(self.up_proj.weight.data, dtype=torch.bool)
-        self.up_proj_mask[topk_indices] = False
-        self.down_proj_mask = torch.zeros_like(self.down_proj.weight.data, dtype=torch.bool)
-        self.down_proj_mask[:, topk_indices] = False
+        self.gate_proj_reduced.weight.data = self.gate_proj.weight.data[topk_indices]
+        self.up_proj_reduced.weight.data = self.up_proj.weight.data[topk_indices]
+        self.down_proj_reduced.weight.data = self.down_proj.weight.data[:, topk_indices]
+
+        # Zero out the non-Top K weights
+        zero_mask_gate = torch.ones_like(self.gate_proj.weight.data, dtype=torch.bool)
+        zero_mask_gate[topk_indices] = False
+        self.gate_proj.weight.data[zero_mask_gate] = 0
+
+        zero_mask_up = torch.ones_like(self.up_proj.weight.data, dtype=torch.bool)
+        zero_mask_up[topk_indices] = False
+        self.up_proj.weight.data[zero_mask_up] = 0
+
+        zero_mask_down = torch.ones(self.down_proj.weight.data.shape, dtype=torch.bool)
+        zero_mask_down[:, topk_indices] = False
+        self.down_proj.weight.data[zero_mask_down] = 0
+
+    def perform_expert_selection(self, x):
+        k_factor = self.k_factor
+        if self.mode == 'gen' and (x.shape[1] > 1) and (self.current_epoch == 0):
+            int_states = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+            if self.config.selection_method != 'magnitude' and k_factor > 0.0:
+                k = int(int_states.shape[-1] * k_factor)
+                neuron_stat = ((int_states / int_states.norm(dim=-1).unsqueeze(-1))).norm(dim=1)
+                topk_weight, topk_indices = select_neurons(neuron_stat, self.config.selection_method, k)
+                self.prepare_reduced_weights(topk_indices)
 
     def set_epoch(self, epoch):
         self.current_epoch = epoch
 
     def forward(self, x):
-        if (self.config.pretraining_tp) > 1:
+        self.perform_expert_selection(x)
+        if self.config.pretraining_tp > 1:
             slice = self.intermediate_size // self.config.pretraining_tp
             gate_proj_slices = self.gate_proj.weight.split(slice, dim=0)
             up_proj_slices = self.up_proj.weight.split(slice, dim=0)
             down_proj_slices = self.down_proj.weight.split(slice, dim=1)
 
-            gate_proj = torch.cat(
-                [F.linear(x, gate_proj_slices[i]) for i in range(self.config.pretraining_tp)], dim=-1
-            )
+            gate_proj = torch.cat([F.linear(x, gate_proj_slices[i]) for i in range(self.config.pretraining_tp)], dim=-1)
             up_proj = torch.cat([F.linear(x, up_proj_slices[i]) for i in range(self.config.pretraining_tp)], dim=-1)
 
             intermediate_states = (self.act_fn(gate_proj) * up_proj).split(slice, dim=2)
-            down_proj = [
-                F.linear(intermediate_states[i], down_proj_slices[i]) for i in range(self.config.pretraining_tp)
-            ]
+            down_proj = [F.linear(intermediate_states[i], down_proj_slices[i]) for i in range(self.config.pretraining_tp)]
             down_proj = sum(down_proj)
-        
         else:
             k_factor = self.k_factor
-
-            if (self.mode == 'gen'):
+            if self.mode == 'gen':
                 if (x.shape[1] > 1) and (self.current_epoch == 0):
                     int_states = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
                     if self.config.selection_method != 'magnitude' and k_factor > 0.0:
-                        print('expert selection phase', self.current_epoch)
                         k = int(int_states.shape[-1] * k_factor)
                         neuron_stat = ((int_states / int_states.norm(dim=-1).unsqueeze(-1))).norm(dim=1)
                         topk_weight, topk_indices = select_neurons(neuron_stat, self.config.selection_method, k)
                         self.prepare_reduced_weights(topk_indices)
-
                     down_proj = self.down_proj(int_states)
                 else:
                     if k_factor == 0.0:
                         down_proj = 0 * x
                     else:
-                        print('reduced weights phase', self.current_epoch)
-                        self.gate_proj.weight.data[self.gate_proj_mask] = 0
-                        self.up_proj.weight.data[self.up_proj_mask] = 0
-                        self.down_proj.weight.data[self.down_proj_mask] = 0
-                        int_states = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-                        down_proj = self.down_proj(int_states)
-
+                        down_proj = self.down_proj_reduced(self.act_fn(self.gate_proj_reduced(x)) * self.up_proj_reduced(x))
                 self.current_epoch += 1
-
             elif self.mode == 'class':
                 assert x.shape[1] > 1
                 int_states = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
@@ -110,22 +121,19 @@ class LlamaMLP(nn.Module):
                     k = int(int_states.shape[-1] * k_factor)
                     neuron_stat = ((int_states / int_states.norm(dim=-1).unsqueeze(-1)))[:, :-1].norm(dim=1)
                     topk_weight, topk_indices = select_neurons(neuron_stat, self.config.selection_method, k)
-                    
-                    # Not tested for batch size > 1
                     mask = torch.zeros_like(int_states[:, -1], dtype=torch.bool)
                     mask.scatter_(dim=-1, index=topk_indices, src=torch.ones_like(mask))
                     int_states[:, -1] = mask * int_states[:, -1]
-                    
                 else:
                     int_states[:, -1, self.mag_mask.to(int_states.device)] = 0
                 down_proj = self.down_proj(int_states)
             else:
                 raise NotImplementedError
-
         return down_proj
+'''
 
-"""
-#-----------------------------OLD CODE WITHOUT DROPPING-----------------------------------
+
+#-----------------------------NOT MASKING----------------------------------
 # Adapted from Hugging Face implementation
 
 import torch
@@ -139,6 +147,7 @@ def get_llama_griffin(model,  k_schedule):
     for i, l in enumerate(model.model.layers):
         # print('i:', i)
         new_mlp = LlamaMLP(config, k_schedule[i])
+
         new_mlp.gate_proj = l.mlp.gate_proj
         new_mlp.up_proj = l.mlp.up_proj
         new_mlp.down_proj = l.mlp.down_proj
@@ -190,7 +199,7 @@ class LlamaMLP(nn.Module):
         self.up_proj_reduced.weight.data = self.up_proj.weight.data[topk_indices]
         self.down_proj_reduced.weight.data = self.down_proj.weight.data[:, topk_indices]
     
-     # @vashisthtiwari
+    # @vashisthtiwari
     def set_epoch(self, epoch):
         self.current_epoch = epoch
 
@@ -211,14 +220,11 @@ class LlamaMLP(nn.Module):
                 F.linear(intermediate_states[i], down_proj_slices[i]) for i in range(self.config.pretraining_tp)
             ]
             down_proj = sum(down_proj)
-            # print('final down proj', down_proj.shape)
         
         else:
             k_factor = self.k_factor
-            # print('epoch_count', self.current_epoch)
-
+            # print(f'k_factor: {k_factor}')
             if (self.mode == 'gen'):
-
                 if (x.shape[1] > 1) and (self.current_epoch == 0):
                     int_states = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
                     # GRIFFIN Expert Selection
@@ -228,13 +234,12 @@ class LlamaMLP(nn.Module):
                         neuron_stat = ((int_states / int_states.norm(dim=-1).unsqueeze(-1))).norm(dim=1) # B, D
                         topk_weight, topk_indices = select_neurons(neuron_stat, self.config.selection_method, k)
                         self.prepare_reduced_weights(topk_indices)
-                        
                     down_proj = self.down_proj(int_states)
                 else:
                     if k_factor == 0.0:
                         down_proj = 0 * x 
                     else:
-                        print('reduced weights phase', self.current_epoch)
+                        # print('reduced weights phase', self.current_epoch)
                         down_proj = self.down_proj_reduced(self.act_fn(self.gate_proj_reduced(x)) * self.up_proj_reduced(x))
 
                 self.current_epoch += 1
@@ -255,10 +260,6 @@ class LlamaMLP(nn.Module):
                 else:
                     int_states[:, -1, self.mag_mask.to(int_states.device)] = 0
                 down_proj = self.down_proj(int_states)
-                # print('class', down_proj.shape)
             else:
                 raise NotImplementedError
-        # print('final down', down_proj.shape)
-        # self.x_size = 0
         return down_proj
-"""

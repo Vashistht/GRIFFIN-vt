@@ -134,7 +134,7 @@ def main(dataset='cnn', shots=1, model_arch='llama2', model_size=0, cache_dir=No
     
     schedule_k = [args.density for _ in range(config.num_hidden_layers)]
     
-    if args.density < 1:
+    if args.density < 1: # never enters gen so try .999 or something
         model.config.mode = 'gen'
         model.config.selection_method = args.selection_method
         model = modify_dict[args.model_arch](model, schedule_k)
