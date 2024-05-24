@@ -21,7 +21,7 @@ import logging
 
 
 import numpy as np
-from griffin.llama_og import get_llama_griffin
+from griffin.llama import get_llama_griffin
 from griffin.gemma import get_gemma_griffin
 from griffin.mistral import get_mistral_griffin
 from griffin.opt import get_opt_griffin
@@ -169,7 +169,11 @@ def main():
                 skipped+=1
                 print('skipped', skipped)
 
-            else:
+            else: 
+                if schedule_k[0]>0:
+                    for layer in model.model.layers:
+                        layer.mlp.set_epoch(0)
+                                        
                 output_sequences = model.generate(
                     input_ids=input_ids,
                     max_length=max_tokens + len(input_ids[0]),

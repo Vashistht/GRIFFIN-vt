@@ -99,7 +99,7 @@ def set_seed(args):
 # multinomial sampling by calling _sample() if num_beams=1 and do_sample=True
 
 def main(dataset='cnn', shots=1, model_arch='llama2', model_size=0, cache_dir=None,
-         density=0.1, selection_method='topk', sample_num=1, max_length=-1,
+         density=0.5, selection_method='topk', sample_num=1, max_length=-1,
          k=0, max_tokens=128, seed=42, temp=0.3, greedy=False, device='cuda:9', forward= False): # @vashisthtiwari 
     
     class Args:
