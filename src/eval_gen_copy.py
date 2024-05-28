@@ -181,6 +181,7 @@ def main():
                     top_k=args.k,
                     top_p=1,
                     # do_sample=not args.greedy,
+                    use_cache = False,
                     do_sample=True,
                     num_return_sequences=1,
                     return_dict_in_generate=True, output_scores=True,
@@ -188,7 +189,7 @@ def main():
 
                 tokens = tokenizer.convert_ids_to_tokens(output_sequences['sequences'].squeeze(0))[len(input_ids[0]):]
                 logprobs = [logits.log_softmax(dim=-1).max().item() for logits in output_sequences['scores']]
-                top_logprobs = [{i: v for i, v in zip(tokens, logprobs)}]
+                # top_logprobs = [{i: v for i, v in zip(tokens, logprobs)}]
 
                 generate_text = tokenizer.decode(output_sequences['sequences'].squeeze(0)[len(input_ids[0]):])
                 generate_text = generate_text[: generate_text.find(stop[0])]
@@ -206,7 +207,7 @@ def main():
                             "logprobs": {
                                 "tokens": tokens, 
                                 "token_logprobs": logprobs, 
-                                "top_logprobs": top_logprobs, 
+                                # "top_logprobs": top_logprobs, 
                                 "text_offset": []
                             }, 
                             "finish_reason": "length"
@@ -226,3 +227,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

@@ -233,6 +233,7 @@ class LlamaMLP(nn.Module):
     
     def forward(self, x):
         if self.config.pretraining_tp > 1:
+            print('pretraining_tp')
             slice = self.intermediate_size // self.config.pretraining_tp
             gate_proj_slices = self.gate_proj.weight.split(slice, dim=0)
             up_proj_slices = self.up_proj.weight.split(slice, dim=0)
@@ -251,24 +252,25 @@ class LlamaMLP(nn.Module):
         else:
             k_factor = self.k_factor
             if self.mode == 'gen':
-                if x.shape[1] > 1:
+                if (self.current_epoch == 0): # (x.shape[1] > 1 ) # 1, seq, d_model
                     int_states = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-
                     # GRIFFIN Expert Selection
-                    if self.config.selection_method != 'magnitude' and (k_factor > 0.0) and (self.current_epoch == 0): ###
-                        print('expert selection', self.current_epoch)
+                    if self.config.selection_method != 'magnitude' and (k_factor > 0.0): ###
+                        # print('expert selection', self.current_epoch, x.shape)
                         k = int(int_states.shape[-1] * k_factor)
                         neuron_stat = ((int_states / int_states.norm(dim=-1).unsqueeze(-1))).norm(dim=1) # B, D
                         topk_weight, topk_indices = select_neurons(neuron_stat, self.config.selection_method, k)
                         self.prepare_reduced_weights(topk_indices)
                     down_proj = self.down_proj(int_states)
 
-                else:
+                else: # expects (1,1, d)
+                    # print('reduced', x.shape)
                     if k_factor == 0.0:
                         down_proj = 0 * x 
                     else:
                         down_proj =self.down_proj_reduced(self.act_fn(self.gate_proj_reduced(x)) * self.up_proj_reduced(x))
                 self.current_epoch += 1
+       
 
             elif self.mode == 'class':
                 assert x.shape[1] > 1

@@ -176,9 +176,9 @@ def main():
                     temperature=temperature,
                     top_k=args.k,
                     top_p=1,
-                    # do_sample=not args.greedy,
-                    do_sample=True,
+                    do_sample=not args.greedy,
                     num_return_sequences=1,
+                    use_cache=True,
                     return_dict_in_generate=True, output_scores=True,
                     )
 
@@ -188,7 +188,7 @@ def main():
 
                 generate_text = tokenizer.decode(output_sequences['sequences'].squeeze(0)[len(input_ids[0]):])
                 generate_text = generate_text[: generate_text.find(stop[0])]
-                print(generate_text)
+
                 scores = rouge.get_scores(generate_text, label)[0]
                 seq_lens.append(len(input_ids[0]))
                 rouge1_score_list.append(scores['rouge-1']['f'])
