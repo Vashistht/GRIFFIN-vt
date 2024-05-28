@@ -21,7 +21,7 @@ import logging
 
 
 import numpy as np
-from griffin.llama import get_llama_griffin
+from griffin.llama_og import get_llama_griffin
 from griffin.gemma import get_gemma_griffin
 from griffin.mistral import get_mistral_griffin
 from griffin.opt import get_opt_griffin
@@ -166,7 +166,7 @@ def set_seed(args):
 
 def main(dataset='xsum', shots=1, model_arch='llama2', model_size=0, cache_dir=None,
          density=0.5, selection_method='topk', sample_num=1, max_length=-1,
-         k=0, max_tokens=32, seed=42, temp=0.3, greedy=False, device='cuda:1', forward= False): # @vashisthtiwari 
+         k=0, max_tokens=64, seed=42, temp=0.3, greedy=False, device='cuda:7', forward= True): # @vashisthtiwari 
     
     class Args:
         def __init__(self, **kwargs):
@@ -204,7 +204,7 @@ def main(dataset='xsum', shots=1, model_arch='llama2', model_size=0, cache_dir=N
         input_paths = [f'/home/vashistt/Desktop/GRIFFIN-vt/data/cnn_data/cnn_dailymail_{args.shots}shot.jsonl']
     elif args.dataset == 'xsum':
         # input_paths = [f'../data/xsum_data/xsum_{args.shots}shot.jsonl']
-        input_paths = [f'/home/vashistt/Desktop/GRIFFIN-vt/data/xsum_data/xsum_{args.shots}shot.jsonl']
+        input_paths = [f'/home/vashistt/Desktop/GRIFFIN-vt/data/xsum_data/xsum_{args.shots}shot_20.jsonl']
     else:
         raise NotImplementedError
     
@@ -225,7 +225,7 @@ def main(dataset='xsum', shots=1, model_arch='llama2', model_size=0, cache_dir=N
                  if line.strip() != '':
                      requests.append(json.loads(line))
 
-    # requests = requests[:1]
+    requests = requests[:5]
     
     results = []
     rouge = Rouge()
@@ -255,14 +255,17 @@ def main(dataset='xsum', shots=1, model_arch='llama2', model_size=0, cache_dir=N
                 skipped+=1
                 print('skipped', skipped)
             else:
-                for layer in model.model.layers:
-                    layer.mlp.set_epoch(0)
+                # for layer in model.model.layers:
+                #     layer.mlp.set_epoch(0)
                 
                 if args.forward == True:
                     print('using model forward')
                     # print('input_ids:', input_ids.shape)
-                    input_ids = autoregressive_sampling(input_ids, model, max_tokens, temperature, args.k, 1)
                     
+                    while len(input_ids[0]) < original_input_len+ max_tokens:
+                        input_ids = autoregressive_sampling(input_ids, model, 2, temperature, args.k, 1)
+                        print('input_ids:', input_ids.shape)
+                    # input_ids = autoregressive_sampling(input_ids, model, max_tokens, temperature, args.k, 1)
                     generate_text = tokenizer.decode(input_ids[0][original_input_len:])
                     generate_text = generate_text[: generate_text.find(stop[0])]
                     

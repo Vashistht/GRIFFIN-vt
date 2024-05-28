@@ -252,7 +252,7 @@ class LlamaMLP(nn.Module):
         else:
             k_factor = self.k_factor
             if self.mode == 'gen':
-                if (self.current_epoch %2 ==0): # (x.shape[1] > 1 ) # 1, seq, d_model
+                if (self.current_epoch ==0): # (x.shape[1] > 1 ) # 1, seq, d_model
                     int_states = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
                     # GRIFFIN Expert Selection
                     if self.config.selection_method != 'magnitude' and (k_factor > 0.0): ###
@@ -269,6 +269,7 @@ class LlamaMLP(nn.Module):
                         down_proj = 0 * x 
                     else:
                         down_proj =self.down_proj_reduced(self.act_fn(self.gate_proj_reduced(x)) * self.up_proj_reduced(x))
+                        # import pdb; pdb.set_trace()
                 self.current_epoch += 1
 
             elif self.mode == 'class':
