@@ -1,6 +1,5 @@
 import torch
 
-
 def select_neurons(neuron_stat, method, k):
     if method == 'topk':
         # print('input neuron shape', neuron_stat.shape)

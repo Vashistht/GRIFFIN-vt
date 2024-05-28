@@ -88,10 +88,10 @@ class LlamaMLP(nn.Module):
                         neuron_stat = ((int_states / int_states.norm(dim=-1).unsqueeze(-1))).norm(dim=1) # B, D
                         topk_weight, topk_indices = select_neurons(neuron_stat, self.config.selection_method, k)
                         self.prepare_reduced_weights(topk_indices)
-                        
+                    
                     down_proj = self.down_proj(int_states)
 
-                else:
+                else:                        
                     if k_factor == 0.0:
                         down_proj = 0 * x 
                     else:

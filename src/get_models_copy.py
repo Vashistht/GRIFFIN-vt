@@ -166,7 +166,7 @@ def set_seed(args):
 
 def main(dataset='xsum', shots=1, model_arch='llama2', model_size=0, cache_dir=None,
          density=0.5, selection_method='topk', sample_num=1, max_length=-1,
-         k=0, max_tokens=64, seed=42, temp=0.3, greedy=False, device='cuda:1', forward= True): # @vashisthtiwari 
+         k=0, max_tokens=32, seed=42, temp=0.3, greedy=False, device='cuda:1', forward= False): # @vashisthtiwari 
     
     class Args:
         def __init__(self, **kwargs):
@@ -225,7 +225,7 @@ def main(dataset='xsum', shots=1, model_arch='llama2', model_size=0, cache_dir=N
                  if line.strip() != '':
                      requests.append(json.loads(line))
 
-    # requests = requests[:args.sample_num]
+    # requests = requests[:1]
     
     results = []
     rouge = Rouge()
@@ -241,9 +241,6 @@ def main(dataset='xsum', shots=1, model_arch='llama2', model_size=0, cache_dir=N
         for i, request in enumerate(tqdm.tqdm(requests)):        
             stop = ['###']
             temperature = args.temp
-            # prompt = request['article']
-            # prompt = 'The United States of America is '
-            # print('prompt:', prompt)
             prompt = request['article']
             label = request['summary_gt']
             max_tokens = args.max_tokens
@@ -263,16 +260,7 @@ def main(dataset='xsum', shots=1, model_arch='llama2', model_size=0, cache_dir=N
                 
                 if args.forward == True:
                     print('using model forward')
-                    print('input_ids:', input_ids.shape)
-                    # total_len = len(input_ids[0])
-                    # target_len = max_tokens + len(input_ids[0])
-                    
-                    # while total_len < target_len :
-                    #     q = model(input_ids).logits
-                    #     dist = norm_logits(q[:, -1, :], temp, top_k=0, top_p=1.0)
-                    #     next_tok = sample(dist)
-                    #     input_ids = torch.cat((input_ids, next_tok), dim=1)
-                    #     total_len += 1
+                    # print('input_ids:', input_ids.shape)
                     input_ids = autoregressive_sampling(input_ids, model, max_tokens, temperature, args.k, 1)
                     
                     generate_text = tokenizer.decode(input_ids[0][original_input_len:])
@@ -299,8 +287,7 @@ def main(dataset='xsum', shots=1, model_arch='llama2', model_size=0, cache_dir=N
 
                     generate_text = tokenizer.decode(output_sequences['sequences'].squeeze(0)[len(input_ids[0]):])
                     generate_text = generate_text[: generate_text.find(stop[0])]
-                    print('generated using .generate:', generate_text)
-                # print(generate_text)
+                    # print('generated using .generate:', generate_text)
                 scores = rouge.get_scores(generate_text, label)[0]
                 seq_lens.append(len(input_ids[0]))
                 rouge1_score_list.append(scores['rouge-1']['f'])
