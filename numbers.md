@@ -22,3 +22,7 @@
 Conclusion:
     - works with kv cache!
     - 
+
+Works on griffin-sweep_test_rogue.py
+    - rouge-1: 0.26586697119220853, rouge-2: 0.06810361828271567, rouge-l: 0.1891289093378677
+    
