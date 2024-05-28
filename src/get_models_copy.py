@@ -72,27 +72,43 @@ def sample(probs : torch.Tensor, num_samples: int = 1):
     idx_next = torch.multinomial(probs, num_samples=num_samples)
     return idx_next
 
-@torch.no_grad()
-def autoregressive_sampling(x : torch.Tensor, model : torch.nn.Module, N : int, 
-                            temperature : float = 1, top_k : int = 0, top_p : float = 0):
-    n = len(x)
-    T = len(x) + N
+# @torch.no_grad()
+# def autoregressive_sampling(x : torch.Tensor, model : torch.nn.Module, N : int, 
+#                             temperature : float = 1, top_k : int = 0, top_p : float = 0):
+#     n = len(x)
+#     T = len(x) + N
 
-    past_key_values = None
+#     past_key_values = None
+#     while n < T:
+#         # outputs = model(x)
+#         if past_key_values:
+#             last_ids = x[:, -1]
+#             if last_ids.dim() == 1:
+#                 last_ids = torch.unsqueeze(last_ids, 0)
+#             outputs = model(last_ids, past_key_values = past_key_values, use_cache = True)
+#         else:
+#             outputs = model(x)
+#         last_p = norm_logits(outputs.logits[::, -1, :], temperature, top_k, top_p)
+#         past_key_values = outputs.past_key_values
+#         idx_next = sample(last_p)
+#         x = torch.cat((x, idx_next), dim=1)
+#         n += 1
+#     return x
+@torch.no_grad()
+def autoregressive_sampling(x, model, N, temperature=1, top_k=0, top_p=0.0):
+    n = len(x)
+    T = n + N
+    input = x
+    past_kv = None
+
     while n < T:
-        # outputs = model(x)
-        if past_key_values:
-            last_ids = x[:, -1]
-            if last_ids.dim() == 1:
-                last_ids = torch.unsqueeze(last_ids, 0)
-            outputs = model(last_ids, past_key_values = past_key_values, use_cache = True)
-        else:
-            outputs = model(x)
-        last_p = norm_logits(outputs.logits[::, -1, :], temperature, top_k, top_p)
-        past_key_values = outputs.past_key_values
-        idx_next = sample(last_p)
-        x = torch.cat((x, idx_next), dim=1)
+        res = model(input, past_key_values=past_kv, use_cache=True )
+        next_token = norm_logits(res.logits[:, -1, :], temperature, top_k, top_p) 
+        next_token = sample(next_token) if temperature != 0 else torch.argmax(next_token, dim=1, keepdim=True)
+        past_kv = res.past_key_values
+        x = torch.cat((x, next_token), dim=1)
         n += 1
+        input = next_token
     return x
 
 # def get_distribution(logits, temperature, epsilon=1e-8):
