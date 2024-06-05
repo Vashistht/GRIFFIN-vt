@@ -167,8 +167,8 @@ def get_llama_griffin(model,  k_schedule):
 
 #  down_proj = self.down_proj_reduced(self.act_fn(self.gate_proj_reduced(x)) * self.up_proj_reduced(x))
 
-
 # Adapted from Hugging Face implementation
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -209,7 +209,7 @@ class LlamaMLP(nn.Module):
         self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
         self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
         self.act_fn = F.silu
-        self.current_epoch = 0
+        
         self.k_factor = k_factor
         self.mode = config.mode
         assert self.mode in ['gen', 'class']
@@ -227,13 +227,9 @@ class LlamaMLP(nn.Module):
         self.up_proj_reduced.weight.data = self.up_proj.weight.data[topk_indices]
         self.down_proj_reduced.weight.data = self.down_proj.weight.data[:, topk_indices]
     
-    # @vashisthtiwari
-    def set_epoch(self, epoch):
-        self.current_epoch = epoch
-    
+
     def forward(self, x):
         if self.config.pretraining_tp > 1:
-            print('pretraining_tp')
             slice = self.intermediate_size // self.config.pretraining_tp
             gate_proj_slices = self.gate_proj.weight.split(slice, dim=0)
             up_proj_slices = self.up_proj.weight.split(slice, dim=0)
@@ -252,25 +248,26 @@ class LlamaMLP(nn.Module):
         else:
             k_factor = self.k_factor
             if self.mode == 'gen':
-                if (self.current_epoch ==0): # (x.shape[1] > 1 ) # 1, seq, d_model
+                if x.shape[1] > 1:
                     int_states = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+
                     # GRIFFIN Expert Selection
-                    if self.config.selection_method != 'magnitude' and (k_factor > 0.0): ###
-                        # print('expert selection', self.current_epoch, x.shape)
+                    if self.config.selection_method != 'magnitude' and k_factor > 0.0: ###
+                        # print('expert selection', x.shape)
                         k = int(int_states.shape[-1] * k_factor)
                         neuron_stat = ((int_states / int_states.norm(dim=-1).unsqueeze(-1))).norm(dim=1) # B, D
                         topk_weight, topk_indices = select_neurons(neuron_stat, self.config.selection_method, k)
                         self.prepare_reduced_weights(topk_indices)
+                        
                     down_proj = self.down_proj(int_states)
 
-                else: # expects (1,1, d)
-                    # print('reduced', x.shape)
+                else:
+                    # print('reduced weights', x.shape)
                     if k_factor == 0.0:
                         down_proj = 0 * x 
                     else:
+                        # print('reduced weights')
                         down_proj =self.down_proj_reduced(self.act_fn(self.gate_proj_reduced(x)) * self.up_proj_reduced(x))
-                        # import pdb; pdb.set_trace()
-                self.current_epoch += 1
 
             elif self.mode == 'class':
                 assert x.shape[1] > 1

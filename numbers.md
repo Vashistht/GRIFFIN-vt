@@ -1,4 +1,46 @@
 ### 20 samples, t=.3, max_tokens = 64
+
+
+FINAL RESULTS, for 20 requests, with select_only 2 and max_tokens 64:
+rouge-1: 0.261620, rouge-2: 0.075396, rouge-l: 0.205441
+
+FINAL RESULTS, for 20 requests, with select_only 4 and max_tokens 64:
+rouge-1: 0.254364, rouge-2: 0.079299, rouge-l: 0.195337
+
+FINAL RESULTS, for 20 requests, with select_only 6 and max_tokens 64:
+rouge-1: 0.246636, rouge-2: 0.068545, rouge-l: 0.195369
+
+FINAL RESULTS, for 20 requests, with select_only 8 and max_tokens 64:
+rouge-1: 0.251608, rouge-2: 0.076325, rouge-l: 0.192071
+
+FINAL RESULTS, for 20 requests, with select_only 12 and max_tokens 64:
+rouge-1: 0.256835, rouge-2: 0.073455, rouge-l: 0.202085
+
+
+FINAL RESULTS, for 20 requests, with select_only 16 and max_tokens 64:
+rouge-1: 0.258728, rouge-2: 0.072984, rouge-l: 0.195409
+
+FINAL RESULTS, for 20 requests, with select_only 20 and max_tokens 64:
+rouge-1: 0.243615, rouge-2: 0.062146, rouge-l: 0.183115
+
+FINAL RESULTS, for 20 requests, with select_only 24 and max_tokens 64:
+rouge-1: 0.264634, rouge-2: 0.089232, rouge-l: 0.213648
+
+FINAL RESULTS, for 20 requests, with select_only 32 and max_tokens 64:
+rouge-1: 0.250811, rouge-2: 0.070185, rouge-l: 0.189729
+
+
+
+
+
+
+
+
+
+
+
+
+### 20 samples, t=.3, max_tokens = 64
 - use_cache =True, LLama base model
 rouge-1: 0.254426, rouge-2: 0.081417, rouge-l: 0.202948
 
@@ -31,7 +73,6 @@ rouge-1: 0.00, rouge-2: 0.00, rouge-l: 0.00 ## something wrong with slicing
 ### 5 samples, t=.3, max_tokens = 64
 - can just use llama_og and get the same values with autoreg and cache=True
 - get
-
 
 
 ---
