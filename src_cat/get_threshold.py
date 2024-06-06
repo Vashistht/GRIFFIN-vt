@@ -159,15 +159,15 @@ requests = requests[:sample_num]
 skipped=0
 n_v_all_layer = []
 tokenized_requests = []
-requests = ['What is the meaning of life?', '2+2 is 4 and how are you today', 'what is the capital of France?']
+# requests = ['What is the meaning of life?', '2+2 is 4 and how are you today', 'what is the capital of France?']
 
 with torch.no_grad():
     for i, request in enumerate(tqdm.tqdm(requests)):        
         stop = ['###']
         temperature = temp
-        # label = request['summary_gt']
-        # prompt = request['article']
-        prompt = requests[i]
+        label = request['summary_gt']
+        prompt = request['article']
+        # prompt = requests[i]
         max_tokens = max_tokens
         result = {}
         
@@ -181,6 +181,12 @@ with torch.no_grad():
 
 # %%
 # %%
+# warmup 
+for i in range(1):
+    y = model(tokenized_requests[i].to(device))
+    for number, layer in enumerate(model.model.layers):
+        layer.mlp.reset_v_list()
+
 v_list_layers_samples = torch.zeros(len(requests), 32, 1, 11008)
 with torch.no_grad():
     for i in range(len(tokenized_requests)):
@@ -257,41 +263,7 @@ def save_thresholds_txt(layer_threshold_k,k_value, save_filename=None, dataset =
 # s, d)
 
 
-def get_cdf_thresholds(v_list_layers_samples, k=0.5):
-    """
-    expects v_list_layers_samples of shape (n_samples, n_layers, 1, d)
-    returns dict with per layer threshold value for some percentile k
-    """
-    n_samples = v_list_layers_samples.shape[0]
-    n_layers = v_list_layers_samples.shape[1]
-    d = v_list_layers_samples.shape[3]
-    
-    layer_threshold_k = {}
 
-    # Flatten =
-    v_list_layers_flat = v_list_layers_samples.view(-1, n_layers, d)  
-    # Shape: (n_samples * 1, n_layers, d)
-
-    # Calculate thresholds for each layer
-    for layer_idx in range(n_layers):
-        layer_name = f'layer_{layer_idx}'
-
-        # Get v across samples
-        all_v = v_list_layers_flat[:, layer_idx, :].flatten().numpy()
-        abs_v = np.abs(all_v)
-
-        # CDF
-        sorted_abs_v = np.sort(abs_v)
-        cdf = np.arange(1, len(sorted_abs_v) + 1) / len(sorted_abs_v)
-
-        # min t such that CDF is >= k
-        cdf_threshold_index = np.searchsorted(cdf, k)
-        cdf_threshold_value = sorted_abs_v[cdf_threshold_index]
-        layer_threshold_k[layer_name] = cdf_threshold_value
-    
-    print(f'_____for k={k}_______')
-    print(layer_threshold_k)
-    return layer_threshold_k
 
 def save_thresholds_txt(layer_threshold_k,k_value, save_filename=None, dataset = 'xsum'):
     if save_filename is None:
@@ -303,6 +275,7 @@ def save_thresholds_txt(layer_threshold_k,k_value, save_filename=None, dataset =
     
     print(f"Thresholds saved to {save_filename}.txt")
 
+# %%#
 def plot_histograms_and_cdf(v_list_layers_samples, layer_threshold_k, y_threshold=0.001, save_plots=None, normalize=True):
     n_samples = v_list_layers_samples.shape[0]
     n_layers = v_list_layers_samples.shape[1]
@@ -346,12 +319,7 @@ def plot_histograms_and_cdf(v_list_layers_samples, layer_threshold_k, y_threshol
         plt.show()
 # %%
 
-
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
-
-def plot_histograms_and_cdf(v_list_layers_samples, layer_threshold_k, y_threshold=0.001, save_plots=None, normalize=True):
+def plot_histograms_and_cdf_filled(v_list_layers_samples, layer_threshold_k, y_threshold=0.001, save_plots=None, bins_num = 300):
     n_samples = v_list_layers_samples.shape[0]
     n_layers = v_list_layers_samples.shape[1]
     d = v_list_layers_samples.shape[3]
@@ -370,7 +338,7 @@ def plot_histograms_and_cdf(v_list_layers_samples, layer_threshold_k, y_threshol
         within_threshold = abs_v <= cdf_threshold_value
         outside_threshold = abs_v > cdf_threshold_value
 
-        hist, bins = np.histogram(abs_v, bins=300, density=True)
+        hist, bins = np.histogram(abs_v, bins=bins_num, density=True)
         
         bin_width = bins[1] - bins[0]
         normalized_hist = hist * bin_width
@@ -396,11 +364,13 @@ def plot_histograms_and_cdf(v_list_layers_samples, layer_threshold_k, y_threshol
         axs[i].set_xlim(0, x_max)
 
     if save_plots is not None:
-        plt.savefig(f"{save_plots}.png")
+        plt.savefig(f"{save_plots}.png", dpi=300)
     else:
         plt.show()
-
-# Example usage (replace with actual data tensor)
-# v_list_layers_samples = torch.randn((n_samples, n_layers, 1, d))
-# layer_threshold_k = get_cdf_thresholds(v_list_layers_samples, k=0.5)
-# plot_histograms_and_cdf(v_list_layers_samples, layer_threshold_k)
+# %%
+layer_threshold_05 = get_cdf_thresholds(v_list_layers_samples, k=0.5)
+# save_thresholds_txt(layer_threshold_05, 0.5, save_filename='xsum-20-50-threshold')
+plot_histograms_and_cdf_filled(v_list_layers_samples, layer_threshold_05, y_threshold=0.001,save_plots='xsum-20-50-hist-300bins')
+# %%
+plot_histograms_and_cdf_filled(v_list_layers_samples, layer_threshold_05, y_threshold=0.0007,save_plots='xsum-20-50-hist-1000bins', bins_num=1000)
+# %%
