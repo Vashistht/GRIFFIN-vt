@@ -56,17 +56,19 @@ class LlamaMLP(nn.Module):
                 x = x [:, -1, :]
                 v = self.act_fn(self.gate_proj(x))
                 v_abs = torch.abs(v)
-                Mask = (torch.zeros_like(v_abs) == 1) ## initialize a mask to be all False
+                Mask = (torch.zeros_like(v_abs) == 1) ## initialize a mask to be all False 1, 11008
                 Mask = v_abs > self.threshold
                 Mask = Mask.float()
-                import pdb; pdb.set_trace()
                 v_masked = v.mul(Mask)
                 assert v_masked.shape == v.shape
+                import pdb; pdb.set_trace()
                 W_up_masked = (self.up_proj.weight.data).mul(Mask.T)# (11008x4096) *(1, 11008)
-                # (W_up_masked*x) = [11008, 4096], 
-                W_down_masked = (self.up_proj.weight.data).mul(Mask.T)
+                # (W_up_masked*x) = [11008, 4096]
+                W_down_masked = (self.down_proj.weight.data).mul(Mask.T)
 
                 x1 = (W_up_masked.mul(x)).mul(v_masked.T) # [11008, 4096]
                 y = (x1).mul(W_down_masked) # [11008, 4096]
                 assert y.shape ==  self.up_proj.weight.data.shape
             return y
+        
+        print(f'W_down_proj: {self.down_proj.shape}')
