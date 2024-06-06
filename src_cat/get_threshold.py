@@ -116,9 +116,6 @@ tokenizer = AutoTokenizer.from_pretrained(hugging_name_dict['llama2'](model_size
 model = AutoModelForCausalLM.from_pretrained(hugging_name_dict['llama2'](model_size_name))
 
 print("PARAMS: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
-shots = 1
-dataset = 'xsum'
-sample_num=10
 
 schedule_k = [density for _ in range(config.num_hidden_layers)]
 
@@ -130,6 +127,9 @@ if density < 1: # never enters gen so try .999 or something
 model.half()
 model.eval().to(device)
 # %%
+shots = 0
+dataset = 'xsum'
+sample_num=100
 if dataset == 'cnn':
     # input_paths = [f'../data/cnn_data/cnn_dailymail_{shots}shot.jsonl']
     input_paths = [f'/home/vashistt/Desktop/GRIFFIN-vt/data/cnn_data/cnn_dailymail_{shots}shot.jsonl']
@@ -155,6 +155,7 @@ for input_path in input_paths:
                     requests.append(json.loads(line))
 
 requests = requests[:sample_num]
+print(f'Len (requests): {len(requests)}')
 # %%
 skipped=0
 n_v_all_layer = []
@@ -369,8 +370,8 @@ def plot_histograms_and_cdf_filled(v_list_layers_samples, layer_threshold_k, y_t
         plt.show()
 # %%
 layer_threshold_05 = get_cdf_thresholds(v_list_layers_samples, k=0.5)
-# save_thresholds_txt(layer_threshold_05, 0.5, save_filename='xsum-20-50-threshold')
-plot_histograms_and_cdf_filled(v_list_layers_samples, layer_threshold_05, y_threshold=0.001,save_plots='xsum-20-50-hist-300bins')
+save_thresholds_txt(layer_threshold_05, 0.5, save_filename=f'{dataset}-{shots}shot-samples{sample_num}-50-threshold')
+plot_histograms_and_cdf_filled(v_list_layers_samples, layer_threshold_05, y_threshold=0.001,save_plots=f'{dataset}-{shots}shot-samples{sample_num}-50-hist-300bins', bins_num=300)
 # %%
-plot_histograms_and_cdf_filled(v_list_layers_samples, layer_threshold_05, y_threshold=0.0007,save_plots='xsum-20-50-hist-1000bins', bins_num=1000)
+plot_histograms_and_cdf_filled(v_list_layers_samples, layer_threshold_05, y_threshold=0.001,save_plots=f'{dataset}-{shots}shot-samples{sample_num}-50-hist-1000bins', bins_num =300)
 # %%
